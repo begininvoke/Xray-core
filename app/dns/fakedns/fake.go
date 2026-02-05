@@ -4,19 +4,19 @@ import (
 	"context"
 	"math"
 	"math/big"
-	gonet "net"
 	"sync"
 	"time"
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/cache"
+	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/features/dns"
 )
 
 type Holder struct {
 	domainToIP cache.Lru
-	ipRange    *gonet.IPNet
+	ipRange    *net.IPNet
 	mu         *sync.Mutex
 
 	config *FakeDnsPool
@@ -45,7 +45,7 @@ func (fkdns *Holder) Start() error {
 	if fkdns.config != nil && fkdns.config.IpPool != "" && fkdns.config.LruSize != 0 {
 		return fkdns.initializeFromConfig()
 	}
-	return newError("invalid fakeDNS setting")
+	return errors.New("invalid fakeDNS setting")
 }
 
 func (fkdns *Holder) Close() error {
@@ -60,7 +60,7 @@ func NewFakeDNSHolder() (*Holder, error) {
 	var err error
 
 	if fkdns, err = NewFakeDNSHolderConfigOnly(nil); err != nil {
-		return nil, newError("Unable to create Fake Dns Engine").Base(err).AtError()
+		return nil, errors.New("Unable to create Fake Dns Engine").Base(err).AtError()
 	}
 	err = fkdns.initialize(dns.FakeIPv4Pool, 65535)
 	if err != nil {
@@ -78,17 +78,17 @@ func (fkdns *Holder) initializeFromConfig() error {
 }
 
 func (fkdns *Holder) initialize(ipPoolCidr string, lruSize int) error {
-	var ipRange *gonet.IPNet
+	var ipRange *net.IPNet
 	var err error
 
-	if _, ipRange, err = gonet.ParseCIDR(ipPoolCidr); err != nil {
-		return newError("Unable to parse CIDR for Fake DNS IP assignment").Base(err).AtError()
+	if _, ipRange, err = net.ParseCIDR(ipPoolCidr); err != nil {
+		return errors.New("Unable to parse CIDR for Fake DNS IP assignment").Base(err).AtError()
 	}
 
 	ones, bits := ipRange.Mask.Size()
 	rooms := bits - ones
 	if math.Log2(float64(lruSize)) >= float64(rooms) {
-		return newError("LRU size is bigger than subnet size").AtError()
+		return errors.New("LRU size is bigger than subnet size").AtError()
 	}
 	fkdns.domainToIP = cache.NewLru(lruSize)
 	fkdns.ipRange = ipRange
@@ -137,7 +137,7 @@ func (fkdns *Holder) GetDomainFromFakeDNS(ip net.Address) string {
 	if k, ok := fkdns.domainToIP.GetKeyFromValue(ip); ok {
 		return k.(string)
 	}
-	newError("A fake ip request to ", ip, ", however there is no matching domain name in fake DNS").AtInfo().WriteToLog()
+	errors.LogInfo(context.Background(), "A fake ip request to ", ip, ", however there is no matching domain name in fake DNS")
 	return ""
 }
 
@@ -192,10 +192,10 @@ func (h *HolderMulti) Start() error {
 	for _, v := range h.holders {
 		if v.config != nil && v.config.IpPool != "" && v.config.LruSize != 0 {
 			if err := v.Start(); err != nil {
-				return newError("Cannot start all fake dns pools").Base(err)
+				return errors.New("Cannot start all fake dns pools").Base(err)
 			}
 		} else {
-			return newError("invalid fakeDNS setting")
+			return errors.New("invalid fakeDNS setting")
 		}
 	}
 	return nil
@@ -204,7 +204,7 @@ func (h *HolderMulti) Start() error {
 func (h *HolderMulti) Close() error {
 	for _, v := range h.holders {
 		if err := v.Close(); err != nil {
-			return newError("Cannot close all fake dns pools").Base(err)
+			return errors.New("Cannot close all fake dns pools").Base(err)
 		}
 	}
 	return nil

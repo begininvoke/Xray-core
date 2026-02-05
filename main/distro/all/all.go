@@ -50,12 +50,11 @@ import (
 	_ "github.com/xtls/xray-core/proxy/wireguard"
 
 	// Transports
-	_ "github.com/xtls/xray-core/transport/internet/domainsocket"
 	_ "github.com/xtls/xray-core/transport/internet/grpc"
-	_ "github.com/xtls/xray-core/transport/internet/http"
+	_ "github.com/xtls/xray-core/transport/internet/httpupgrade"
 	_ "github.com/xtls/xray-core/transport/internet/kcp"
-	_ "github.com/xtls/xray-core/transport/internet/quic"
 	_ "github.com/xtls/xray-core/transport/internet/reality"
+	_ "github.com/xtls/xray-core/transport/internet/splithttp"
 	_ "github.com/xtls/xray-core/transport/internet/tcp"
 	_ "github.com/xtls/xray-core/transport/internet/tls"
 	_ "github.com/xtls/xray-core/transport/internet/udp"
@@ -64,11 +63,6 @@ import (
 	// Transport headers
 	_ "github.com/xtls/xray-core/transport/internet/headers/http"
 	_ "github.com/xtls/xray-core/transport/internet/headers/noop"
-	_ "github.com/xtls/xray-core/transport/internet/headers/srtp"
-	_ "github.com/xtls/xray-core/transport/internet/headers/tls"
-	_ "github.com/xtls/xray-core/transport/internet/headers/utp"
-	_ "github.com/xtls/xray-core/transport/internet/headers/wechat"
-	_ "github.com/xtls/xray-core/transport/internet/headers/wireguard"
 
 	// JSON & TOML & YAML
 	_ "github.com/xtls/xray-core/main/json"
@@ -80,7 +74,4 @@ import (
 
 	// Commands
 	_ "github.com/xtls/xray-core/main/commands/all"
-
-	// Custom
-	_ "github.com/xtls/xray-core/proxy/shadowsocks/plugin/v2ray_plugin"
 )

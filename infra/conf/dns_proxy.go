@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/proxy/dns"
 	"google.golang.org/protobuf/proto"
@@ -12,6 +13,7 @@ type DNSOutboundConfig struct {
 	Port       uint16   `json:"port"`
 	UserLevel  uint32   `json:"userLevel"`
 	NonIPQuery string   `json:"nonIPQuery"`
+	BlockTypes []int32  `json:"blockTypes"`
 }
 
 func (c *DNSOutboundConfig) Build() (proto.Message, error) {
@@ -26,12 +28,11 @@ func (c *DNSOutboundConfig) Build() (proto.Message, error) {
 		config.Server.Address = c.Address.Build()
 	}
 	switch c.NonIPQuery {
-	case "":
-		c.NonIPQuery = "drop"
-	case "drop", "skip":
+	case "", "reject", "drop", "skip":
 	default:
-		return nil, newError(`unknown "nonIPQuery": `, c.NonIPQuery)
+		return nil, errors.New(`unknown "nonIPQuery": `, c.NonIPQuery)
 	}
 	config.Non_IPQuery = c.NonIPQuery
+	config.BlockTypes = c.BlockTypes
 	return config, nil
 }

@@ -3,10 +3,10 @@ package encoding
 import (
 	"context"
 	"io"
-	"net"
 
 	"github.com/xtls/xray-core/common/buf"
-	xnet "github.com/xtls/xray-core/common/net"
+	"github.com/xtls/xray-core/common/errors"
+	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/net/cnc"
 	"github.com/xtls/xray-core/common/signal/done"
 	"google.golang.org/grpc/metadata"
@@ -54,7 +54,7 @@ func NewHunkConn(hc HunkConn, cancel context.CancelFunc) net.Conn {
 	if ok {
 		header := md.Get("x-real-ip")
 		if len(header) > 0 {
-			realip := xnet.ParseAddress(header[0])
+			realip := net.ParseAddress(header[0])
 			if realip.Family().IsIP() {
 				rAddr = &net.TCPAddr{
 					IP:   realip.IP(),
@@ -79,7 +79,7 @@ func (h *HunkReaderWriter) forceFetch() error {
 			return err
 		}
 
-		return newError("failed to fetch hunk from gRPC tunnel").Base(err)
+		return errors.New("failed to fetch hunk from gRPC tunnel").Base(err)
 	}
 
 	h.buf = hunk.Data
@@ -135,7 +135,7 @@ func (h *HunkReaderWriter) Write(buf []byte) (int, error) {
 
 	err := h.hc.Send(&Hunk{Data: buf[:]})
 	if err != nil {
-		return 0, newError("failed to send data over gRPC tunnel").Base(err)
+		return 0, errors.New("failed to send data over gRPC tunnel").Base(err)
 	}
 	return len(buf), nil
 }

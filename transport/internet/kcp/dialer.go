@@ -8,6 +8,7 @@ import (
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/dice"
+	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/stat"
@@ -46,39 +47,39 @@ func fetchInput(_ context.Context, input io.Reader, reader PacketReader, conn *C
 // DialKCP dials a new KCP connections to the specific destination.
 func DialKCP(ctx context.Context, dest net.Destination, streamSettings *internet.MemoryStreamConfig) (stat.Connection, error) {
 	dest.Network = net.Network_UDP
-	newError("dialing mKCP to ", dest).WriteToLog()
+	errors.LogInfo(ctx, "dialing mKCP to ", dest)
 
 	rawConn, err := internet.DialSystem(ctx, dest, streamSettings.SocketSettings)
 	if err != nil {
-		return nil, newError("failed to dial to dest: ", err).AtWarning().Base(err)
+		return nil, errors.New("failed to dial to dest: ", err).AtWarning().Base(err)
+	}
+
+	if streamSettings.UdpmaskManager != nil {
+		wrapper, ok := rawConn.(*internet.PacketConnWrapper)
+		if !ok {
+			rawConn.Close()
+			return nil, errors.New("raw is not PacketConnWrapper")
+		}
+
+		raw := wrapper.Conn
+
+		wrapper.Conn, err = streamSettings.UdpmaskManager.WrapPacketConnClient(raw)
+		if err != nil {
+			raw.Close()
+			return nil, errors.New("mask err").Base(err)
+		}
 	}
 
 	kcpSettings := streamSettings.ProtocolSettings.(*Config)
 
-	header, err := kcpSettings.GetPackerHeader()
-	if err != nil {
-		return nil, newError("failed to create packet header").Base(err)
-	}
-	security, err := kcpSettings.GetSecurity()
-	if err != nil {
-		return nil, newError("failed to create security").Base(err)
-	}
-	reader := &KCPPacketReader{
-		Header:   header,
-		Security: security,
-	}
-	writer := &KCPPacketWriter{
-		Header:   header,
-		Security: security,
-		Writer:   rawConn,
-	}
+	reader := &KCPPacketReader{}
 
 	conv := uint16(atomic.AddUint32(&globalConv, 1))
 	session := NewConnection(ConnMetadata{
 		LocalAddr:    rawConn.LocalAddr(),
 		RemoteAddr:   rawConn.RemoteAddr(),
 		Conversation: conv,
-	}, writer, rawConn, kcpSettings)
+	}, rawConn, rawConn, kcpSettings)
 
 	go fetchInput(ctx, rawConn, reader, session)
 

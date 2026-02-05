@@ -2,57 +2,15 @@ package conf_test
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/xtls/xray-core/app/dns"
-	"github.com/xtls/xray-core/app/router"
-	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/platform"
-	"github.com/xtls/xray-core/common/platform/filesystem"
 	. "github.com/xtls/xray-core/infra/conf"
 	"google.golang.org/protobuf/proto"
 )
 
-func init() {
-	wd, err := os.Getwd()
-	common.Must(err)
-
-	if _, err := os.Stat(platform.GetAssetLocation("geoip.dat")); err != nil && os.IsNotExist(err) {
-		common.Must(filesystem.CopyFile(platform.GetAssetLocation("geoip.dat"), filepath.Join(wd, "..", "..", "resources", "geoip.dat")))
-	}
-
-	geositeFilePath := filepath.Join(wd, "geosite.dat")
-	os.Setenv("xray.location.asset", wd)
-	geositeFile, err := os.OpenFile(geositeFilePath, os.O_CREATE|os.O_WRONLY, 0o600)
-	common.Must(err)
-	defer geositeFile.Close()
-
-	list := &router.GeoSiteList{
-		Entry: []*router.GeoSite{
-			{
-				CountryCode: "TEST",
-				Domain: []*router.Domain{
-					{Type: router.Domain_Full, Value: "example.com"},
-				},
-			},
-		},
-	}
-
-	listBytes, err := proto.Marshal(list)
-	common.Must(err)
-	common.Must2(geositeFile.Write(listBytes))
-}
-
 func TestDNSConfigParsing(t *testing.T) {
-	geositePath := platform.GetAssetLocation("geosite.dat")
-	defer func() {
-		os.Remove(geositePath)
-		os.Unsetenv("xray.location.asset")
-	}()
-
 	parserCreator := func() func(string) (proto.Message, error) {
 		return func(s string) (proto.Message, error) {
 			config := new(DNSConfig)
@@ -62,7 +20,8 @@ func TestDNSConfigParsing(t *testing.T) {
 			return config.Build()
 		}
 	}
-
+	expectedServeStale := true
+	expectedServeExpiredTTL := uint32(172800)
 	runMultiTestCase(t, []TestCase{
 		{
 			Input: `{
@@ -70,7 +29,9 @@ func TestDNSConfigParsing(t *testing.T) {
 					"address": "8.8.8.8",
 					"port": 5353,
 					"skipFallback": true,
-					"domains": ["domain:example.com"]
+					"domains": ["domain:example.com"],
+					"serveStale": true,
+					"serveExpiredTTL": 172800
 				}],
 				"hosts": {
 					"domain:example.com": "google.com",
@@ -82,6 +43,8 @@ func TestDNSConfigParsing(t *testing.T) {
 				"clientIp": "10.0.0.1",
 				"queryStrategy": "UseIPv4",
 				"disableCache": true,
+				"serveStale": false,
+				"serveExpiredTTL": 86400,
 				"disableFallback": true
 			}`,
 			Parser: parserCreator(),
@@ -110,6 +73,9 @@ func TestDNSConfigParsing(t *testing.T) {
 								Size: 1,
 							},
 						},
+						ServeStale:      &expectedServeStale,
+						ServeExpiredTTL: &expectedServeExpiredTTL,
+						PolicyID:        1, // Servers with certain identical fields share this ID, incrementing starting from 1. See: Build PolicyID
 					},
 				},
 				StaticHosts: []*dns.Config_HostMapping{
@@ -142,6 +108,8 @@ func TestDNSConfigParsing(t *testing.T) {
 				ClientIp:        []byte{10, 0, 0, 1},
 				QueryStrategy:   dns.QueryStrategy_USE_IP4,
 				DisableCache:    true,
+				ServeStale:      false,
+				ServeExpiredTTL: 86400,
 				DisableFallback: true,
 			},
 		},

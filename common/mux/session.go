@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"context"
 	"io"
 	"runtime"
 	"sync"
@@ -8,8 +9,10 @@ import (
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
+	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
+	"github.com/xtls/xray-core/common/signal/done"
 	"github.com/xtls/xray-core/transport/pipe"
 )
 
@@ -48,11 +51,14 @@ func (m *SessionManager) Count() int {
 	return int(m.count)
 }
 
-func (m *SessionManager) Allocate() *Session {
+func (m *SessionManager) Allocate(Strategy *ClientStrategy) *Session {
 	m.Lock()
 	defer m.Unlock()
 
-	if m.closed {
+	MaxConcurrency := int(Strategy.MaxConcurrency)
+	MaxConnection := uint16(Strategy.MaxConnection)
+
+	if m.closed || (MaxConcurrency > 0 && len(m.sessions) >= MaxConcurrency) || (MaxConnection > 0 && m.count >= MaxConnection) {
 		return nil
 	}
 
@@ -60,6 +66,7 @@ func (m *SessionManager) Allocate() *Session {
 	s := &Session{
 		ID:     m.count,
 		parent: m,
+		done:   done.New(),
 	}
 	m.sessions[s.ID] = s
 	return s
@@ -110,7 +117,7 @@ func (m *SessionManager) Get(id uint16) (*Session, bool) {
 	return s, found
 }
 
-func (m *SessionManager) CloseIfNoSession() bool {
+func (m *SessionManager) CloseIfNoSessionAndIdle(checkSize int, checkCount int) bool {
 	m.Lock()
 	defer m.Unlock()
 
@@ -118,11 +125,13 @@ func (m *SessionManager) CloseIfNoSession() bool {
 		return true
 	}
 
-	if len(m.sessions) != 0 {
+	if len(m.sessions) != 0 || checkSize != 0 || checkCount != int(m.count) {
 		return false
 	}
 
 	m.closed = true
+
+	m.sessions = nil
 	return true
 }
 
@@ -152,6 +161,7 @@ type Session struct {
 	ID           uint16
 	transferType protocol.TransferType
 	closed       bool
+	done         *done.Instance
 	XUDP         *XUDP
 }
 
@@ -166,6 +176,9 @@ func (s *Session) Close(locked bool) error {
 		return nil
 	}
 	s.closed = true
+	if s.done != nil {
+		s.done.Close()
+	}
 	if s.XUDP == nil {
 		common.Interrupt(s.input)
 		common.Close(s.output)
@@ -180,7 +193,7 @@ func (s *Session) Close(locked bool) error {
 		if s.XUDP.Status == Active {
 			s.XUDP.Expire = time.Now().Add(time.Minute)
 			s.XUDP.Status = Expiring
-			newError("XUDP put ", s.XUDP.GlobalID).AtDebug().WriteToLog()
+			errors.LogDebug(context.Background(), "XUDP put ", s.XUDP.GlobalID)
 		}
 		XUDPManager.Unlock()
 	}
@@ -230,7 +243,7 @@ func init() {
 				if x.Status == Expiring && now.After(x.Expire) {
 					x.Interrupt()
 					delete(XUDPManager.Map, id)
-					newError("XUDP del ", id).AtDebug().WriteToLog()
+					errors.LogDebug(context.Background(), "XUDP del ", id)
 				}
 			}
 			XUDPManager.Unlock()

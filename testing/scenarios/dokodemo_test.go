@@ -85,28 +85,22 @@ func TestDokodemoTCP(t *testing.T) {
 						Listen:   net.NewIPOrDomain(net.LocalHostIP),
 					}),
 					ProxySettings: serial.ToTypedMessage(&dokodemo.Config{
-						Address: net.NewIPOrDomain(dest.Address),
-						Port:    uint32(dest.Port),
-						NetworkList: &net.NetworkList{
-							Network: []net.Network{net.Network_TCP},
-						},
+						Address:  net.NewIPOrDomain(dest.Address),
+						Port:     uint32(dest.Port),
+						Networks: []net.Network{net.Network_TCP},
 					}),
 				},
 			},
 			Outbound: []*core.OutboundHandlerConfig{
 				{
 					ProxySettings: serial.ToTypedMessage(&outbound.Config{
-						Receiver: []*protocol.ServerEndpoint{
-							{
-								Address: net.NewIPOrDomain(net.LocalHostIP),
-								Port:    uint32(serverPort),
-								User: []*protocol.User{
-									{
-										Account: serial.ToTypedMessage(&vmess.Account{
-											Id: userID.String(),
-										}),
-									},
-								},
+						Receiver: &protocol.ServerEndpoint{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User:    &protocol.User{
+								Account: serial.ToTypedMessage(&vmess.Account{
+									Id: userID.String(),
+								}),
 							},
 						},
 					}),
@@ -171,7 +165,7 @@ func TestDokodemoUDP(t *testing.T) {
 	common.Must(err)
 	defer CloseServer(server)
 
-	clientPortRange := uint32(5)
+	clientPortRange := uint32(3)
 	retry := 1
 	clientPort := uint32(udp.PickPort())
 	for {
@@ -183,28 +177,22 @@ func TestDokodemoUDP(t *testing.T) {
 						Listen:   net.NewIPOrDomain(net.LocalHostIP),
 					}),
 					ProxySettings: serial.ToTypedMessage(&dokodemo.Config{
-						Address: net.NewIPOrDomain(dest.Address),
-						Port:    uint32(dest.Port),
-						NetworkList: &net.NetworkList{
-							Network: []net.Network{net.Network_UDP},
-						},
+						Address:  net.NewIPOrDomain(dest.Address),
+						Port:     uint32(dest.Port),
+						Networks: []net.Network{net.Network_UDP},
 					}),
 				},
 			},
 			Outbound: []*core.OutboundHandlerConfig{
 				{
 					ProxySettings: serial.ToTypedMessage(&outbound.Config{
-						Receiver: []*protocol.ServerEndpoint{
-							{
-								Address: net.NewIPOrDomain(net.LocalHostIP),
-								Port:    uint32(serverPort),
-								User: []*protocol.User{
-									{
-										Account: serial.ToTypedMessage(&vmess.Account{
-											Id: userID.String(),
-										}),
-									},
-								},
+						Receiver: &protocol.ServerEndpoint{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User:    &protocol.User{
+								Account: serial.ToTypedMessage(&vmess.Account{
+									Id: userID.String(),
+								}),
 							},
 						},
 					}),
